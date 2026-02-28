@@ -185,8 +185,18 @@ async function main() {
   console.log(`[init] startUrls (${startUrls.length}):`);
   startUrls.forEach(u => console.log(`  - ${u}`));
 
-  const browser = await chromium.launch({ headless: true });
-  const ctx = await browser.newContext();
+  const browser = await chromium.launch({
+    headless: true,
+    args: ["--disable-blink-features=AutomationControlled"],
+  });
+  const ctx = await browser.newContext({
+    userAgent:
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+  });
+  // Hide the webdriver flag that headless Chrome exposes
+  await ctx.addInitScript(() => {
+    Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+  });
   const page = await ctx.newPage();
 
   await loginIfNeeded(page, {
