@@ -44,7 +44,7 @@ const batchSize = Math.max(1, parseInt(BATCH_SIZE, 10) || 50);
 function makeKey(item) {
   const url = item.url || "";
   const handle = (url.match(/\/products\/([^/?#]+)/i) || [])[1] || "";
-  return handle;   // ALWAYS use handle — ignore SKU for dedupe
+  return handle; // ALWAYS use handle — ignore SKU for dedupe
 }
 
 // util: dedupe by key (last write wins)
@@ -62,7 +62,6 @@ function chunk(arr, n) {
   return out;
 }
 
-// Normalise vendor for Core (Apple / DJI / Nintendo / Microsoft / Accessories)
 // --- Vendor normaliser for Core (Apple / DJI / Nintendo / Microsoft / Accessories) ----
 function normaliseVendorForCore(prod) {
   const title = (prod.title || "").trim();
@@ -73,7 +72,14 @@ function normaliseVendorForCore(prod) {
   const s = sku.toLowerCase();
 
   // Strong brand keyword checks
-  const hasApple = t.includes("apple") || t.includes("macbook") || t.includes("imac") || t.includes("ipad") || t.includes("iphone") || t.includes("airpods") || t.includes("watch");
+  const hasApple =
+    t.includes("apple") ||
+    t.includes("macbook") ||
+    t.includes("imac") ||
+    t.includes("ipad") ||
+    t.includes("iphone") ||
+    t.includes("airpods") ||
+    t.includes("watch");
   const hasDJI = t.includes("dji") || t.includes("mavic") || t.includes("osmo") || t.includes("ronin");
   const hasNintendo = t.includes("nintendo") || t.includes("switch") || t.includes("joy-con") || t.includes("joycon");
   const hasMicrosoft = t.includes("microsoft") || t.includes("surface");
@@ -88,7 +94,7 @@ function normaliseVendorForCore(prod) {
   const isNintendoSku = s.startsWith("n") && (s.includes("switch") || s.includes("ns") || s.includes("hac")); // loose
   const isDJISku = s.startsWith("dji");
   const isMicrosoftSku = s.startsWith("surface") || s.startsWith("microsoft");
-  const isAppleSku = /^[a-z0-9]{5,6}$/i.test(sku) || s.startsWith("mq") || s.startsWith("mn") || s.startsWith("my"); // Apple retail SKU patterns are often short
+  const isAppleSku = /^[a-z0-9]{5,6}$/i.test(sku) || s.startsWith("mq") || s.startsWith("mn") || s.startsWith("my");
 
   if (hasDJI || isDJISku) vendor = "DJI";
   else if (hasNintendo || isNintendoSku) vendor = "Nintendo";
@@ -148,6 +154,33 @@ async function sendBatchesForCollection(items, collectionIndex, collectionUrl) {
   }
 }
 
+// Core collections often hydrate the grid after DOMContentLoaded.
+// This helper waits for product anchors and triggers lazy-load/hydration.
+async function ensureCollectionHydrated(page, { isFirstPage } = { isFirstPage: false }) {
+  // Give SPA/hydration a chance (don’t fail if it never reaches networkidle)
+  await page.waitForLoadState("networkidle").catch(() => {});
+
+  // On some Core pages, the /products/ anchors appear only after hydration.
+  await page.waitForSelector('a[href*="/products/"]', { timeout: 20000 }).catch(() => {});
+
+  // Kick lazy-load / grid render by scrolling
+  await page.evaluate(async () => {
+    const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+    window.scrollTo(0, document.body.scrollHeight);
+    await sleep(900);
+    window.scrollTo(0, 0);
+  }).catch(() => {});
+  await page.waitForTimeout(400);
+
+  // If first page and items-per-page dropdown exists, set it, then re-hydrate
+  if (isFirstPage) {
+    await setItemsPerPageToMax(page).catch(() => {});
+    await page.waitForLoadState("networkidle").catch(() => {});
+    await page.waitForSelector('a[href*="/products/"]', { timeout: 15000 }).catch(() => {});
+    await page.waitForTimeout(300);
+  }
+}
+
 async function main() {
   console.log(`[init] startUrls (${startUrls.length}):`);
   startUrls.forEach(u => console.log(`  - ${u}`));
@@ -184,12 +217,8 @@ async function main() {
         timeout: 120000,
       });
 
-      // Only on FIRST page: force items-per-page = max (50)
-      if (pages === 1) {
-        await setItemsPerPageToMax(page);
-        await page.waitForSelector('a[href*="/products/"]', { timeout: 15000 })
-          .catch(() => {});
-      }
+      // ✅ Core fix: wait for hydration + scroll kick + optional items-per-page on page 1
+      await ensureCollectionHydrated(page, { isFirstPage: pages === 1 });
 
       const links = await getProductLinksOnPage(page);
       console.log(
@@ -206,6 +235,10 @@ async function main() {
                 timeout: 120000,
               });
 
+              // Product pages can also hydrate after DOMContentLoaded
+              await p.waitForLoadState("networkidle").catch(() => {});
+              await p.waitForTimeout(200);
+
               const prodRaw = await extractProduct(p);
               const prod = normaliseVendorForCore(prodRaw);
 
@@ -219,7 +252,7 @@ async function main() {
 
               const key = makeKey(full);
               if (globalSeenKeys.has(key)) {
-                //console.log(`  ◦ duplicate key, skipping: ${key}`);
+                // duplicate key, skipping
               } else {
                 globalSeenKeys.add(key);
                 collectedForSet.push(full);
