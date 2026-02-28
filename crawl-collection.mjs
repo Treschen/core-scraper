@@ -177,7 +177,15 @@ async function ensureCollectionHydrated(page, { isFirstPage } = { isFirstPage: f
     await setItemsPerPageToMax(page).catch(() => {});
     await page.waitForLoadState("networkidle").catch(() => {});
     await page.waitForSelector('a[href*="/products/"]', { timeout: 15000 }).catch(() => {});
-    await page.waitForTimeout(300);
+    
+    // Kick lazy-load again for the expanded grid
+    await page.evaluate(async () => {
+      const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+      window.scrollTo(0, document.body.scrollHeight);
+      await sleep(900);
+      window.scrollTo(0, 0);
+    }).catch(() => {});
+    await page.waitForTimeout(400);
   }
 }
 
