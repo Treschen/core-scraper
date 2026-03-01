@@ -71,9 +71,15 @@ async function main() {
     userAgent:
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
   });
-  // Hide the webdriver flag that headless Chrome exposes
   await ctx.addInitScript(() => {
+    // Hide automation flags
     Object.defineProperty(navigator, "webdriver", { get: () => undefined });
+    // Fake Chrome runtime (missing in headless)
+    window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
+    // Fake plugins array (headless has 0, real Chrome has some)
+    Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3] });
+    // Languages
+    Object.defineProperty(navigator, "languages", { get: () => ["en-US", "en"] });
   });
   const page = await ctx.newPage();
 
