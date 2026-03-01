@@ -1,5 +1,7 @@
 import "dotenv/config";
-import { chromium } from "playwright";
+import { chromium } from "playwright-extra";
+import StealthPlugin from "puppeteer-extra-plugin-stealth";
+chromium.use(StealthPlugin());
 import pLimit from "p-limit";
 
 import { loginIfNeeded } from "./lib/login.mjs";
