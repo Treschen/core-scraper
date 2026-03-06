@@ -45,10 +45,10 @@ function normaliseVendorForCore(prod) {
   const hasSatechi = t.includes("satechi");
 
   // Some lightweight SKU heuristics (optional)
-  const isNintendoSku = s.startsWith("n") && (s.includes("switch") || s.includes("ns") || s.includes("hac")); // loose
+  const isNintendoSku = s.startsWith("n") && (s.includes("switch") || s.includes("ns") || s.includes("hac"));
   const isDJISku = s.startsWith("dji");
   const isMicrosoftSku = s.startsWith("surface") || s.startsWith("microsoft");
-  const isAppleSku = /^[a-z0-9]{5,6}$/i.test(sku) || s.startsWith("mq") || s.startsWith("mn") || s.startsWith("my"); // Apple retail SKU patterns are often short
+  const isAppleSku = /^[a-z0-9]{5,6}$/i.test(sku) || s.startsWith("mq") || s.startsWith("mn") || s.startsWith("my");
 
   if (hasDJI || isDJISku) vendor = "DJI";
   else if (hasNintendo || isNintendoSku) vendor = "Nintendo";
@@ -74,13 +74,9 @@ async function main() {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
   });
   await ctx.addInitScript(() => {
-    // Hide automation flags
     Object.defineProperty(navigator, "webdriver", { get: () => undefined });
-    // Fake Chrome runtime (missing in headless)
     window.chrome = { runtime: {}, loadTimes: () => {}, csi: () => {}, app: {} };
-    // Fake plugins array (headless has 0, real Chrome has some)
     Object.defineProperty(navigator, "plugins", { get: () => [1, 2, 3] });
-    // Languages
     Object.defineProperty(navigator, "languages", { get: () => ["en-US", "en"] });
   });
   const page = await ctx.newPage();
@@ -102,7 +98,7 @@ async function main() {
   // 3) Extract raw product data from the page
   const raw = await extractProduct(page);
 
-  // 4) Normalise vendor (JK / Epson / Dtech) and ensure URL present
+  // 4) Normalise vendor and ensure URL present
   const enriched = normaliseVendorForCore({
     ...raw,
     url: raw.url || PRODUCT_URL,
@@ -110,6 +106,11 @@ async function main() {
 
   // 5) Build canonical item for ingest
   const item = buildCanonicalItem(enriched);
+
+  // DEBUG stock check
+  console.log("[single] raw stockQuantity:", raw.stockQuantity);
+  console.log("[single] enriched stockQuantity:", enriched.stockQuantity);
+  console.log("[single] final quantity:", item.quantity);
 
   console.log("[single] canonical item:", JSON.stringify(item, null, 2));
 
