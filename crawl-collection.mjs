@@ -234,7 +234,7 @@ async function main() {
         )
       );
 
-      const nextUrl = await getNextPageUrl(page);
+      const nextUrl = await getNextPageUrl(page, links.length);
       if (!nextUrl) console.log(`[collection ${idx + 1}] no further page link/data-href found; stopping pagination.`);
       url = nextUrl;
     }
