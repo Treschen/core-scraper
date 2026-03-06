@@ -186,10 +186,14 @@ async function main() {
       console.log(`[collection ${idx + 1}] page ${pages}: ${url}`);
 
       await page.goto(url, { waitUntil: "domcontentloaded", timeout: 120000 });
+
+      await page.waitForTimeout(2500).catch(() => {});
+      await page.waitForLoadState("networkidle").catch(() => {});
       await ensureCollectionHydrated(page);
 
       const links = await getProductLinksOnPage(page);
       console.log(`[collection ${idx + 1}] page ${pages}: found ${links.length} links`);
+      links.slice(0, 10).forEach((l) => console.log(`  - ${l}`));
 
       await Promise.all(
         links.map((href) =>
